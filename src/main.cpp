@@ -4,70 +4,205 @@
 #include "esp_wifi.h"
 #include "esp_bt.h"
 #include "esp_bt_main.h"
-#include "esp_system.h"
+#include "soc/gpio_struct.h"
+#include "soc/gpio_reg.h"
 
-extern "C" void app_main(void)
+/*
+    HUB75 signal lines (example mapping)
+
+    You MUST adjust these if the pin mapping differs.
+    These are typical MatrixPortal S3 HUB75 pins.
+
+    Top half RGB
+*/
+#define PIN_R1 42
+#define PIN_G1 41
+#define PIN_B1 40
+
+/*
+    Bottom half RGB
+*/
+#define PIN_R2 38
+#define PIN_G2 39
+#define PIN_B2 37
+
+/*
+    HUB75 control signals
+*/
+#define PIN_CLK 2
+#define PIN_LAT 47
+#define PIN_OE  48
+
+/*
+    Row address pins
+    We keep them all LOW so row 0 is selected
+*/
+#define PIN_A 45
+#define PIN_B 36
+#define PIN_C 21
+#define PIN_D 14
+#define PIN_E 13
+
+/*
+    Bitmask helper
+*/
+#define PIN_MASK(p) (1ULL << (p))
+
+extern "C" void app_main()
 {
-    // Disable WiFi
+
+    /*
+        --------------------------------------------------
+        Disable WiFi and Bluetooth
+        --------------------------------------------------
+        Removes radio tasks and interrupts
+        which improves timing determinism.
+    */
+
     esp_wifi_stop();
     esp_wifi_deinit();
 
-    // Disable Bluetooth
     esp_bt_controller_disable();
     esp_bt_controller_deinit();
 
-    // HUB75 pins (example — adjust if needed)
-    const gpio_num_t R1 = GPIO_NUM_42;
-    const gpio_num_t G1 = GPIO_NUM_41;
-    const gpio_num_t B1 = GPIO_NUM_40;
 
-    const gpio_num_t R2 = GPIO_NUM_38;
-    const gpio_num_t G2 = GPIO_NUM_39;
-    const gpio_num_t B2 = GPIO_NUM_37;
+    /*
+        --------------------------------------------------
+        Configure all HUB75 pins as outputs
+        --------------------------------------------------
+    */
 
-    const gpio_num_t CLK = GPIO_NUM_2;
-    const gpio_num_t LAT = GPIO_NUM_47;
-    const gpio_num_t OE  = GPIO_NUM_48;
+    gpio_config_t io = {};
+    io.mode = GPIO_MODE_OUTPUT;
+    io.pin_bit_mask =
+        PIN_MASK(PIN_R1) |
+        PIN_MASK(PIN_G1) |
+        PIN_MASK(PIN_B1) |
+        PIN_MASK(PIN_R2) |
+        PIN_MASK(PIN_G2) |
+        PIN_MASK(PIN_B2) |
+        PIN_MASK(PIN_CLK) |
+        PIN_MASK(PIN_LAT) |
+        PIN_MASK(PIN_OE)  |
+        PIN_MASK(PIN_A)   |
+        PIN_MASK(PIN_B)   |
+        PIN_MASK(PIN_C)   |
+        PIN_MASK(PIN_D)   |
+        PIN_MASK(PIN_E);
 
-    gpio_config_t io_conf = {};
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pin_bit_mask =
-        (1ULL<<R1) |
-        (1ULL<<G1) |
-        (1ULL<<B1) |
-        (1ULL<<R2) |
-        (1ULL<<G2) |
-        (1ULL<<B2) |
-        (1ULL<<CLK) |
-        (1ULL<<LAT) |
-        (1ULL<<OE);
+    gpio_config(&io);
 
-    gpio_config(&io_conf);
 
-    // Enable output
-    gpio_set_level(OE, 0);
+    /*
+        --------------------------------------------------
+        Select row 0
+        --------------------------------------------------
+        HUB75 rows are selected by A/B/C/D/E lines.
+        Row 0 = all LOW.
+    */
 
-    while(true)
+    GPIO.out_w1tc =
+        (1 << PIN_A) |
+        (1 << PIN_B) |
+        (1 << PIN_C) |
+        (1 << PIN_D) |
+        (1 << PIN_E);
+
+
+    /*
+        --------------------------------------------------
+        Turn LEDs OFF initially
+        --------------------------------------------------
+        OE is active LOW.
+    */
+
+    GPIO.out_w1ts = (1 << PIN_OE);
+
+
+    /*
+        --------------------------------------------------
+        Precompute masks for faster pixel writes
+        --------------------------------------------------
+    */
+
+    const uint32_t rgb_mask =
+        (1 << PIN_R1) |
+        (1 << PIN_G1) |
+        (1 << PIN_B1) |
+        (1 << PIN_R2) |
+        (1 << PIN_G2) |
+        (1 << PIN_B2);
+
+
+    const uint32_t clk_mask = (1 << PIN_CLK);
+    const uint32_t lat_mask = (1 << PIN_LAT);
+
+
+    /*
+        --------------------------------------------------
+        Main render loop
+        --------------------------------------------------
+        Continuously pushes a full white row to the panel.
+        No delays, maximum speed.
+    */
+
+    while (true)
     {
-        // Turn all RGB channels on
-        gpio_set_level(R1, 1);
-        gpio_set_level(G1, 1);
-        gpio_set_level(B1, 1);
-        gpio_set_level(R2, 1);
-        gpio_set_level(G2, 1);
-        gpio_set_level(B2, 1);
 
-        // Clock some pixels into the shift registers
-        for(int i=0;i<64;i++)
+        /*
+            Disable LED output while shifting pixels
+            (prevents visual glitches)
+        */
+        GPIO.out_w1ts = (1 << PIN_OE);
+
+
+        /*
+            --------------------------------------------------
+            Shift 64 pixels into HUB75 registers
+            --------------------------------------------------
+
+            Each clock shifts one pixel across the panel.
+
+            Setting all RGB pins HIGH means the pixel color
+            will be WHITE.
+
+            This loop is intentionally extremely small so
+            the compiler can optimize it heavily.
+        */
+
+        for (int i = 0; i < 64; i++)
         {
-            gpio_set_level(CLK, 1);
-            gpio_set_level(CLK, 0);
+
+            /* Set RGB lines HIGH (white pixel) */
+            GPIO.out_w1ts = rgb_mask;
+
+            /* CLK HIGH */
+            GPIO.out_w1ts = clk_mask;
+
+            /* CLK LOW */
+            GPIO.out_w1tc = clk_mask;
         }
 
-        // Latch data to outputs
-        gpio_set_level(LAT, 1);
-        gpio_set_level(LAT, 0);
 
-        vTaskDelay(pdMS_TO_TICKS(1));
+        /*
+            --------------------------------------------------
+            Latch shifted data to LED drivers
+            --------------------------------------------------
+        */
+
+        GPIO.out_w1ts = lat_mask;
+        GPIO.out_w1tc = lat_mask;
+
+
+        /*
+            Enable LED output
+        */
+
+        GPIO.out_w1tc = (1 << PIN_OE);
+
+        /*
+            At this point the first row should appear white.
+            Loop immediately repeats to maintain brightness.
+        */
     }
 }
