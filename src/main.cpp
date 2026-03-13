@@ -2,8 +2,6 @@
 #include "freertos/task.h"
 #include "driver/gpio.h"
 #include "esp_wifi.h"
-#include "esp_bt.h"
-#include "esp_bt_main.h"
 #include "soc/gpio_struct.h"
 #include "soc/gpio_reg.h"
 
@@ -61,9 +59,6 @@ extern "C" void app_main()
 
     esp_wifi_stop();
     esp_wifi_deinit();
-
-    esp_bt_controller_disable();
-    esp_bt_controller_deinit();
 
 
     /*
