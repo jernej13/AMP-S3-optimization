@@ -1,0 +1,14 @@
+CompileFlags:
+  Compiler: xtensa-esp32s3-elf-gcc
+  Add:
+    - --target=xtensa
+    - -isystem
+    - ~/.platformio/packages/toolchain-xtensa-esp32s3/xtensa-esp32s3-elf/include
+  Remove:
+    - -m*
+    - -fstrict-volatile-bitfields
+    - -fno-tree-switch-conversion
+    - -mlongcalls
+    - -fno-shrink-wrap
+
+  CompilationDatabase: .pio/build/adafruit_matrixportal_esp32s3
