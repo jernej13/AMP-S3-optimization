@@ -1,16 +1,18 @@
 #include <stdio.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "panel_config.h"
+
+#include "hub75_driver.h"
 
 extern "C" void app_main() {
-    printf("HUB75 deterministic driver starting...\n");
+    HUB75Driver driver;
+    vTaskDelay(pdMS_TO_TICKS(3000));
+
+    driver.init();
+    driver.start();
 
     while (true) {
-        printf("System alive\n");
-
-        printf("Panel size: %dx%d\n", PANEL_WIDTH, PANEL_HEIGHT);
-        printf("Scan rows: %d\n", PANEL_SCAN_ROWS);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
