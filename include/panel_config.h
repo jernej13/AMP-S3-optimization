@@ -19,16 +19,9 @@ A 32x32 panel typically scans 16 rows at a time.
 #define PANEL_SCAN_ROWS 16
 
 /*
-========================================================
-Frame Timing
-========================================================
-Frame period in microseconds.
-
-Example:
-200 us = 5000 FPS internal refresh
+Timer frequency
 */
-
-#define FRAME_TIME_US 200
+#define TIMER_FREQUENCY 5000    //Timer frequency in kHz
 
 /*
 ========================================================
