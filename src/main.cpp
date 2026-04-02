@@ -1,10 +1,7 @@
-#include <stdio.h>
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
 #include "hub75_driver.h"
-
 /*
 ============================================================
 Timer Test Program
@@ -37,6 +34,8 @@ Oscilloscope should show:
 static const char* TAG= "main";
 
 extern "C" void app_main(void) {
+
+    vTaskDelay(pdMS_TO_TICKS(3000));
 
     DBG_LOG(TAG, "System start");
 
